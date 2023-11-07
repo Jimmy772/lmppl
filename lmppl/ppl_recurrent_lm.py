@@ -102,11 +102,11 @@ class LM:
         self.model.eval()
         logging.info(f'\t * model is loaded on: {self.device}')
 
-    def get_perplexity(self, input_texts: str or List, batch: int = None,
-                       forced_reset: bool = False):
+    def get_perplexity(self, input_texts, batch=None, forced_reset=False):
         """ Compute the perplexity on recurrent LM.
         :param input_texts: A string or list of input texts for the encoder.
         :param batch: Batch size
+        :param forced_reset: Whether to perform forced memory cleanup
         :return: A value or list of perplexity.
         """
 
@@ -118,21 +118,23 @@ class LM:
         # Tokenize all input texts and create model inputs
         if self.max_length is not None:
             model_inputs = self.tokenizer(input_texts,
-                                          max_length=self.max_length,
-                                          truncation=True,
-                                          padding='max_length',
-                                          return_tensors='pt')
+                                        max_length=self.max_length,
+                                        truncation=True,
+                                        padding='max_length',
+                                        return_tensors='pt')
         else:
             model_inputs = self.tokenizer(input_texts,
-                                          truncation=True,
-                                          padding=True,
-                                          return_tensors='pt')
+                                        truncation=True,
+                                        padding=True,
+                                        return_tensors='pt')
         if 'token_type_ids' in model_inputs:
             model_inputs.pop('token_type_ids')
 
         loss_list = []
         with torch.no_grad():
-            for start in range(0, len(input_texts), batch):
+            # Create a progress bar
+            progress_bar = tqdm(range(0, len(input_texts), batch), unit='batch')
+            for start in progress_bar:
                 end = start + batch
                 batch_inputs = {
                     k: v[start:end].to(self.device)
@@ -147,7 +149,7 @@ class LM:
                 # Shift the label sequence for causal inference
                 label = batch_inputs['input_ids']
                 label[label ==
-                      self.tokenizer.pad_token_id] = PAD_TOKEN_LABEL_ID
+                    self.tokenizer.pad_token_id] = PAD_TOKEN_LABEL_ID
 
                 # Shift so that tokens < n predict n
                 shift_logits = logit[..., :-1, :].contiguous()
